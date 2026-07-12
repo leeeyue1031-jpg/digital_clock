@@ -1,0 +1,7 @@
+{
+	"common_dir" : "D:/quartus/",
+	"acds_version" : "Version 18.1.0",
+	"platform" : "windows",
+	"os" : "Windows 10",
+	"qpf" : "digital_clock.qpf"
+}

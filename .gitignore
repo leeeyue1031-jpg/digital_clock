@@ -1,0 +1,22 @@
+# Quartus generated output and cache files
+db/
+incremental_db/
+output_files/
+simulation/
+*.bak
+*.orig
+*.tmp
+*.rpt
+*.summary
+*.done
+*.pin
+*.sof
+*.pof
+*.jdi
+*.smsg
+*.qmsg
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
