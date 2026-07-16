@@ -1,14 +1,150 @@
-# Digital Clock
+# DE10-Lite 多功能数字钟
 
-VHDL digital clock project for Intel Quartus.
+基于 VHDL 和 Intel Quartus Prime 开发的 FPGA 多功能数字钟，目标开发板为 Terasic DE10-Lite（Intel MAX 10 10M50DAF484C7G）。工程使用板载 50 MHz 时钟、6 位七段数码管、拨码开关、按键和 LED，实现 24 小时时钟、闹钟、正计时器和倒计时器。
 
-## Contents
+## 功能
 
-- `digital_clock.qpf` / `digital_clock.qsf`: Quartus project files
-- `digital_clock.vhd`: top-level design
-- `bcd_cnt*.vhd`, `cnt*_disp.vhd`, `controller.vhd`, `freqdivider.vhd`, `segment4to7.vhd`: design modules
-- `*.vwf`: waveform test files
+- 24 小时制时钟，显示格式为 `HH MM SS`
+- 时、分、秒独立设置，当前设置项闪烁
+- 闹钟时、分设置及启用开关
+- `00:00` 至 `99:59` 正计时器，可启动、暂停和清零
+- `00:00` 至 `99:59` 倒计时器，可设置、启动和暂停
+- 闹钟到点或倒计时归零时由 LED 闪烁提示
+- 100 倍加速模式，便于演示和调试
+- Quartus 波形文件，用于模块级功能验证
 
-## Open
+## 硬件与软件
 
-Open `digital_clock.qpf` in Quartus to load the project.
+| 项目 | 配置 |
+| --- | --- |
+| 开发板 | Terasic DE10-Lite |
+| FPGA | Intel MAX 10 `10M50DAF484C7G` |
+| 输入时钟 | `MAX10_CLK1_50`，50 MHz |
+| 开发工具 | Intel Quartus Prime Lite 18.1 |
+| 硬件描述语言 | VHDL（IEEE `std_logic_1164`、`numeric_std`） |
+| 顶层实体 | `digital_clock` |
+
+工程的 DE10-Lite 引脚分配已写入 `digital_clock.qsf`，无需手动重新绑定板载开关、按键、LED 和数码管。
+
+## 面板控制
+
+DE10-Lite 的 `KEY0` 和 `KEY1` 为低电平有效：按下时输入为 `0`。每次短按只触发一次操作。
+
+| 控件 | 作用 |
+| --- | --- |
+| `SW0` | 高电平复位全部时间、计时器和设置状态 |
+| `SW2..SW1` | 功能模式选择 |
+| `SW3` | 闹钟使能 |
+| `SW4` | 正计时启动/暂停，`1` 为运行 |
+| `SW5` | 倒计时启动/暂停，`1` 为运行 |
+| `SW9` | 时间加速，`0` 使用 1 Hz，`1` 使用 100 Hz |
+| `KEY0` | 切换当前设置项 |
+| `KEY1` | 当前设置项加一；在正计时模式中用于清零 |
+
+`SW6`、`SW7` 和 `SW8` 当前未使用。
+
+## 模式说明
+
+### 时钟模式：`SW2..SW1 = 00`
+
+数码管显示 `HH MM SS`，范围为 `00:00:00` 至 `23:59:59`。
+
+1. 短按 `KEY0`，依次进入“调小时 -> 调分钟 -> 调秒 -> 正常显示”。
+2. 闪烁的两位数字表示当前设置项。
+3. 短按 `KEY1` 将当前设置项加一，到达上限后回到 0。
+
+### 闹钟模式：`SW2..SW1 = 01`
+
+`HEX5..HEX2` 显示闹钟时间 `HH MM`，`HEX1..HEX0` 熄灭。
+
+1. 短按 `KEY0` 在小时和分钟之间切换，当前设置项闪烁。
+2. 短按 `KEY1` 将当前设置项加一。
+3. 将 `SW3` 置为 `1` 以启用闹钟。
+
+当当前时、分与闹钟时、分相同时，`LEDR4` 按 1 Hz 闪烁。提示会持续到当前分钟结束，或将 `SW3` 关闭。
+
+### 正计时模式：`SW2..SW1 = 10`
+
+`HEX3..HEX0` 显示 `MM SS`，计时范围为 `00:00` 至 `99:59`。
+
+- `SW4 = 1`：开始或继续计时。
+- `SW4 = 0`：暂停计时。
+- 短按 `KEY1`：将正计时器清零。
+- 达到 `99:59` 后，下一个计时脉冲回到 `00:00`。
+
+### 倒计时模式：`SW2..SW1 = 11`
+
+`HEX3..HEX0` 显示 `MM SS`，可设置范围为 `00:00` 至 `99:59`。
+
+1. 先将 `SW5` 置为 `0`，进入暂停/设置状态。
+2. 短按 `KEY0` 在分钟和秒之间切换，当前设置项闪烁。
+3. 短按 `KEY1` 将当前设置项加一。
+4. 将 `SW5` 置为 `1` 开始倒计时，再置为 `0` 可暂停。
+
+倒计时到 `00:00` 后停止递减，`LEDR4` 按 1 Hz 闪烁。由于当前逻辑以零值作为提示条件，刚进入尚未设置的倒计时模式时也会闪烁。
+
+## 数码管与 LED
+
+| 输出 | 含义 |
+| --- | --- |
+| `HEX5..HEX0` | 时钟模式显示 `HH MM SS` |
+| `HEX5..HEX2` | 闹钟模式显示 `HH MM` |
+| `HEX3..HEX0` | 正计时/倒计时模式显示 `MM SS` |
+| `LEDR0` | 当前为时钟模式 |
+| `LEDR1` | 当前为闹钟模式 |
+| `LEDR2` | 当前为正计时或倒计时模式 |
+| `LEDR4` | 闹钟或倒计时提示 |
+| `LEDR9` | 100 倍加速模式指示，与 `SW9` 同步 |
+
+其余 LED 当前固定熄灭。七段数码管为低电平点亮，译码逻辑位于 `segment4to7.vhd`。
+
+## 编译与下载
+
+1. 安装 Intel Quartus Prime Lite 18.1，并安装 MAX 10 器件支持。
+2. 使用 Quartus 打开 `digital_clock.qpf`。
+3. 在 **Processing > Start Compilation** 中编译工程。
+4. 通过 USB-Blaster 连接并上电 DE10-Lite。
+5. 打开 **Tools > Programmer**，选择生成的 `output_files/digital_clock.sof`。
+6. 勾选 **Program/Configure**，点击 **Start** 下载到 FPGA。
+7. 将 `SW0` 短暂置为 `1` 后拨回 `0`，完成初始化。
+
+如需掉电后自动加载，需要使用 Quartus 的转换工具生成适合 MAX 10 配置存储器的文件；本工程默认说明的是 `.sof` 临时下载流程。
+
+## 仿真
+
+仓库包含 `segment4to7.vwf` 和 `Waveform7.vwf` 至 `Waveform12.vwf`。可在 Quartus 中打开相应 `.vwf` 文件，执行功能仿真检查七段译码、BCD 计数和显示模块。
+
+`SW9 = 1` 时，控制器使用 100 Hz 计时脉冲，即显示时间约以正常速度的 100 倍运行，适合在开发板上快速观察进位、闹钟和倒计时行为。
+
+## 工程结构
+
+| 文件 | 说明 |
+| --- | --- |
+| `digital_clock.vhd` | 顶层实体，连接分频器、控制器和 DE10-Lite I/O |
+| `controller.vhd` | 模式控制、时间设置、计时逻辑、显示选择和提示逻辑 |
+| `freqdivider.vhd` | 将 50 MHz 时钟分频为 1 Hz 和 100 Hz |
+| `segment4to7.vhd` | BCD 数字到七段数码管的译码器 |
+| `bcd_cnt.vhd` | 可配置上限的单个 BCD 计数器 |
+| `bcd_cnt24.vhd` | 00 至 23 的两位计数器 |
+| `bcd_cnt60.vhd` | 00 至 59 的两位计数器 |
+| `cnt24_disp.vhd` | 24 进制计数与两位数码管显示封装 |
+| `cnt60_disp.vhd` | 60 进制计数与两位数码管显示封装 |
+| `digital_clock.qpf` | Quartus 工程入口 |
+| `digital_clock.qsf` | 器件、源文件和 DE10-Lite 引脚分配 |
+| `digital_clock.sdc` | 50 MHz 时钟时序约束 |
+| `*.vwf` | Quartus 波形仿真文件 |
+
+## 设计概览
+
+50 MHz 板载时钟经过 `freqdivider` 生成 1 Hz 正常计时脉冲和 100 Hz 加速计时脉冲。`digital_clock` 根据 `SW9` 选择脉冲并交给 `controller`。控制器在 50 MHz 时钟域内检测按键下降沿和计时脉冲上升沿，维护时钟、闹钟及两个计时器的状态，最后通过六个 `segment4to7` 实例驱动数码管。
+
+## 当前限制
+
+- 按键使用简单边沿检测，未实现专用硬件消抖；实际按键抖动可能导致偶发重复触发。
+- 时钟和计时器状态保存在 FPGA 寄存器中，掉电或复位后回到 `00:00:00`。
+- 闹钟只比较小时和分钟，没有蜂鸣器输出，使用 `LEDR4` 作为视觉提示。
+- 工程未包含自动化 VHDL 测试平台，现有验证素材为 Quartus `.vwf` 波形文件。
+
+## License
+
+本仓库当前未附带开源许可证。除非仓库所有者另行说明，代码默认保留所有权利。
